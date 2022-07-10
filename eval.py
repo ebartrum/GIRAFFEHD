@@ -4,6 +4,7 @@ import argparse
 import torch
 from torchvision import utils
 from model import GIRAFFEHDGenerator
+from tqdm import tqdm
 
 def get_interval(args):
     if args.control_i == 4:
@@ -98,9 +99,13 @@ def get_interval(args):
 
 
 def eval(args, generator):
+    if args.control_i == 9:
+        category_dir = "azimuth"
+    else:
+        raise ValueError('Unknown category_dir')
+
     generator.eval()
 
-    img_li = []
     if args.control_i in list(range(0,4)):
         img_rep = generator.get_rand_rep(args.batch)
         for i in range(args.n_sample):
@@ -113,30 +118,26 @@ def eval(args, generator):
         p0, p1 = get_interval(args)
         delta = (p1 - p0) / (args.n_sample - 1)
 
-        img_rep = generator.get_rand_rep(args.batch)
-        for i in range(args.n_sample):
-            p = p0 + delta * i
-            img_rep[args.control_i] = p
-            img = generator(img_rep=img_rep, inject_index=args.inj_idx, mode='eval')[0]
-            img_li.append(img)
+        num_objs_processed = 0
 
-    img = []
-    for b in range(args.batch):
-        b_li = []
-        for i in range(args.n_sample):
-            b_li.append(img_li[i][b:b+1])
-
-        img.append(torch.cat(b_li))
-    img = torch.cat(img)
-
-    utils.save_image(
-        img,
-        f"eval/control_{args.control_i}.png",
-        nrow=args.n_sample,
-        normalize=True,
-        range=(-1, 1),
-    )
-
+        while num_objs_processed < args.num_objs:
+            print(f"Current num_objs_processed: {num_objs_processed}")
+            img_rep = generator.get_rand_rep(args.batch)
+            for i in tqdm(range(args.n_sample)):
+                p = p0 + delta * i
+                img_rep[args.control_i] = p
+                img_batch = generator(img_rep=img_rep, inject_index=args.inj_idx, mode='eval')[0]
+                for img_id, img in enumerate(img_batch):
+                    outdir = os.path.join("eval", category_dir, f"obj_{img_id + num_objs_processed}")
+                    os.makedirs(outdir, exist_ok=True)
+                    filepath = os.path.join(outdir, f"{i}.png")
+                    utils.save_image(
+                        img,
+                        filepath,
+                        normalize=True,
+                        range=(-1, 1),
+                    )
+            num_objs_processed += args.batch
 
 if __name__ == "__main__":
     device = "cuda"
@@ -146,6 +147,9 @@ if __name__ == "__main__":
     parser.add_argument('--ckpt', type=str, default=None, help='path to the checkpoint')
 
     parser.add_argument('--batch', type=int, default=16, help='batch size')
+
+    parser.add_argument('--num_objs', type=int, default=16, help='Number of objs')
+
     parser.add_argument('--n_sample', type=int, default=8, help='number of the samples generated')
     parser.add_argument('--inj_idx', type=int, default=-1, help='inject index for evaluation')
 
