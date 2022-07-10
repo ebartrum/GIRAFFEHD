@@ -99,30 +99,67 @@ def get_interval(args):
 
 
 def eval(args, generator):
-    if args.control_i == 9:
+    if args.control_i == 0:
+        category_dir = "shape"
+    elif args.control_i == 1:
+        category_dir = "fg"
+    elif args.control_i == 3:
+        category_dir = "bg"
+    elif args.control_i == 9:
         category_dir = "azimuth"
     else:
         raise ValueError('Unknown category_dir')
 
     generator.eval()
 
+    num_objs_processed = 0
+
     if args.control_i in list(range(0,4)):
-        img_rep = generator.get_rand_rep(args.batch)
-        for i in range(args.n_sample):
-            _img_rep = generator.get_rand_rep(args.batch)
-            img_rep[args.control_i] = _img_rep[args.control_i]
-            img = generator(img_rep=img_rep, inject_index=args.inj_idx, mode='eval')[0]
-            img_li.append(img)
+        while num_objs_processed < args.num_objs:
+            print(f"Current num_objs_processed: {num_objs_processed}")
+            img_rep = generator.get_rand_rep(args.batch)
+
+            #set defaults to 0.5
+            # img_rep[4] = 0.5*torch.ones_like(img_rep[4])
+            # img_rep[5] = 0.5*torch.ones_like(img_rep[5])
+            # img_rep[7] = 0.5*torch.ones_like(img_rep[7])
+            # img_rep[8] = torch.zeros_like(img_rep[8])
+            img_rep[9] = 0.5*torch.ones_like(img_rep[9])
+            # img_rep[10] = 0.5*torch.ones_like(img_rep[10])
+            # img_rep[11] = 0.5*torch.ones_like(img_rep[11])
+
+            for i in tqdm(range(args.n_sample)):
+                _img_rep = generator.get_rand_rep(args.batch)
+                img_rep[args.control_i] = _img_rep[args.control_i]
+                img_batch = generator(img_rep=img_rep, inject_index=args.inj_idx, mode='eval')[0]
+                for img_id, img in enumerate(img_batch):
+                    outdir = os.path.join("eval", category_dir, f"obj_{img_id + num_objs_processed}")
+                    os.makedirs(outdir, exist_ok=True)
+                    filepath = os.path.join(outdir, f"{i}.png")
+                    utils.save_image(
+                        img,
+                        filepath,
+                        normalize=True,
+                        range=(-1, 1),
+                    )
+            num_objs_processed += args.batch
 
     if args.control_i in list(range(4,12)):
         p0, p1 = get_interval(args)
         delta = (p1 - p0) / (args.n_sample - 1)
-
-        num_objs_processed = 0
-
         while num_objs_processed < args.num_objs:
             print(f"Current num_objs_processed: {num_objs_processed}")
             img_rep = generator.get_rand_rep(args.batch)
+
+            #set defaults to 0.5
+            img_rep[4] = 0.5*torch.ones_like(img_rep[4])
+            img_rep[5] = 0.5*torch.ones_like(img_rep[5])
+            # img_rep[7] = torch.ones_like(img_rep[7])
+            img_rep[8] = torch.zeros_like(img_rep[8])
+            # img_rep[9] = 0.5*torch.ones_like(img_rep[9])
+            # img_rep[10] = 0.5*torch.ones_like(img_rep[10])
+            # img_rep[11] = 0.5*torch.ones_like(img_rep[11])
+
             for i in tqdm(range(args.n_sample)):
                 p = p0 + delta * i
                 img_rep[args.control_i] = p
