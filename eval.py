@@ -105,6 +105,8 @@ def eval(args, generator):
         category_dir = "fg"
     elif args.control_i == 3:
         category_dir = "bg"
+    elif args.control_i == 5:
+        category_dir = "elevation"
     elif args.control_i == 9:
         category_dir = "azimuth"
     else:
@@ -121,7 +123,7 @@ def eval(args, generator):
 
             #set defaults to 0.5
             # img_rep[4] = 0.5*torch.ones_like(img_rep[4])
-            # img_rep[5] = 0.5*torch.ones_like(img_rep[5])
+            img_rep[5] = 0.4584*torch.ones_like(img_rep[5])
             # img_rep[7] = 0.5*torch.ones_like(img_rep[7])
             # img_rep[8] = torch.zeros_like(img_rep[8])
             img_rep[9] = 0.5*torch.ones_like(img_rep[9])
@@ -152,11 +154,11 @@ def eval(args, generator):
             img_rep = generator.get_rand_rep(args.batch)
 
             #set defaults to 0.5
-            img_rep[4] = 0.5*torch.ones_like(img_rep[4])
-            img_rep[5] = 0.5*torch.ones_like(img_rep[5])
+            # img_rep[4] = 0.5*torch.ones_like(img_rep[4])
+            img_rep[5] = 0.4584*torch.ones_like(img_rep[5])
             # img_rep[7] = torch.ones_like(img_rep[7])
-            img_rep[8] = torch.zeros_like(img_rep[8])
-            # img_rep[9] = 0.5*torch.ones_like(img_rep[9])
+            # img_rep[8] = torch.zeros_like(img_rep[8])
+            img_rep[9] = 0.5*torch.ones_like(img_rep[9])
             # img_rep[10] = 0.5*torch.ones_like(img_rep[10])
             # img_rep[11] = 0.5*torch.ones_like(img_rep[11])
 
