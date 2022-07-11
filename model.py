@@ -650,7 +650,6 @@ class GIRAFFEGenerator(nn.Module):
         mode='train',
         not_render_background=False,
         only_render_background=False,
-        return_depth=False
     ):
 
         res = self.resolution_vol
@@ -712,6 +711,7 @@ class GIRAFFEGenerator(nn.Module):
                 sigma_i = sigma_i.reshape(batch_size, n_points, n_steps)
                 feat_i = feat_i.reshape(batch_size, n_points, n_steps, -1)
                 p_i = p_i.reshape(batch_size, n_points, n_steps, -1)
+                p.append(p_i)
 
             else:  # Background
                 p_bg, r_bg = self.get_evaluation_points_bg(
@@ -721,7 +721,8 @@ class GIRAFFEGenerator(nn.Module):
                     p_bg, r_bg, z_shape_bg, z_app_bg)
                 sigma_i = sigma_i.reshape(batch_size, n_points, n_steps)
                 feat_i = feat_i.reshape(batch_size, n_points, n_steps, -1)
-                p_i = p_i.reshape(batch_size, n_points, n_steps, -1)
+                p_bg = p_bg.reshape(batch_size, n_points, n_steps, -1)
+                p.append(p_bg)
 
                 if mode == 'train':
                     # As done in NeRF, add noise during training
@@ -729,7 +730,6 @@ class GIRAFFEGenerator(nn.Module):
 
             feat.append(feat_i)
             sigma.append(sigma_i)
-            p.append(p_i)
 
         sigma = F.relu(torch.stack(sigma, dim=0))
         feat = torch.stack(feat, dim=0)
@@ -756,18 +756,21 @@ class GIRAFFEGenerator(nn.Module):
         p_map = p_map.permute(0, 1, 3, 2)  # new to flip x/y
 
 
-        world_depth_map = F.interpolate(p_map, 128, mode="bilinear")[:, 1]
-        alpha_map = F.interpolate(alpha_map, 128)
+        world_depth_map = p_map[:, 1]
+        # world_depth_map = (world_depth_map+1)/2
+        # world_depth_map = (world_depth_map*255).round().to(torch.uint8)
 
-        for i, depth_map in enumerate(world_depth_map):
-            depth_map = (depth_map+1)/2
-            depth_map = (depth_map*255).round().to(torch.uint8)
-            filename = f"{i}.png"
-            im = Image.fromarray(depth_map.cpu().numpy())
-            im.convert("RGB").save(filename)
-        exit()
+        # alpha_map = F.interpolate(alpha_map, 128)
 
-        return feat_map
+        # for i, depth_map in enumerate(world_depth_map):
+        #     depth_map = (depth_map+1)/2
+        #     depth_map = (depth_map*255).round().to(torch.uint8)
+        #     filename = f"{i}.png"
+        #     im = Image.fromarray(depth_map.cpu().numpy())
+        #     im.convert("RGB").save(filename)
+        # exit()
+
+        return feat_map, world_depth_map
 
     def forward(
         self,
@@ -796,7 +799,7 @@ class GIRAFFEGenerator(nn.Module):
         img_rep = self.img_representation(
             latent_codes, uvr, transformations, rval)
 
-        rgb_v = self.volume_render_image(
+        rgb_v, depth_map = self.volume_render_image(
             latent_codes,
             camera_matrices,
             transformations,
@@ -806,7 +809,7 @@ class GIRAFFEGenerator(nn.Module):
             only_render_background=only_render_background,
         )
 
-        return rgb_v
+        return rgb_v, depth_map
 
 
 ############################### Stylegan Generator ###############################
@@ -1573,8 +1576,8 @@ class GIRAFFEHDGenerator(nn.Module):
 
         _img_rep = grf_latents + img_rep[4:]
 
-        fg_feat = self.vol_generator(not_render_background=True, img_rep=_img_rep, mode=mode)
-        bg_feat = self.vol_generator(only_render_background=True, img_rep=_img_rep, mode=mode)
+        fg_feat, depth_map = self.vol_generator(not_render_background=True, img_rep=_img_rep, mode=mode)
+        bg_feat, _ = self.vol_generator(only_render_background=True, img_rep=_img_rep, mode=mode)
 
         fg, fg_out = self.fg_renderer(fg_feat, [w_s_fg, w_a_fg], inject_index=inject_index, mode=mode)
         _fg_img = fg[:, 0:3]
@@ -1593,7 +1596,7 @@ class GIRAFFEHDGenerator(nn.Module):
 
         fnl_img = fg_img * fg_mk + bg_img * (1 - fg_mk)
 
-        img_li = [fnl_img, fg_img, bg_img, _fg_img, fg_residual_img, fg_mk]
+        img_li = [fnl_img, fg_img, bg_img, _fg_img, fg_residual_img, fg_mk, depth_map]
 
         if return_ids != []:
             for i in range(len(img_li)):
