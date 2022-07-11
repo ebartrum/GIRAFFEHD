@@ -5,6 +5,7 @@ import torch
 from torchvision import utils
 from model import GIRAFFEHDGenerator
 from tqdm import tqdm
+import math
 
 def get_interval(args):
     if args.control_i == 4:
@@ -65,6 +66,11 @@ def get_interval(args):
                 args.batch, 1).to(args.device)
             p1 = torch.tensor([[args.ckpt_args.rotation_range[1]]]).repeat(
                 args.batch, 1).to(args.device)
+
+            rotation_radians = 0.45
+            rotation_proportion = rotation_radians / (2*math.pi) # unit here seems to be radians / 2pi
+            p0 = -torch.ones_like(p0)*rotation_proportion + 0.5 # 0.5 is frontal pose (pi radians)
+            p1 = torch.ones_like(p1)*rotation_proportion + 0.5
         else:
             p0 = torch.tensor([[args.rotation_range[0]]]).repeat(
                 args.batch, 1).to(args.device)
