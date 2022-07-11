@@ -103,8 +103,10 @@ def eval(args, generator):
         category_dir = "shape"
     elif args.control_i == 1:
         category_dir = "fg"
+    elif args.control_i == 2:
+        category_dir = "bg_shape"
     elif args.control_i == 3:
-        category_dir = "bg"
+        category_dir = "bg_appearance"
     elif args.control_i == 5:
         category_dir = "elevation"
     elif args.control_i == 9:
