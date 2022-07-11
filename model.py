@@ -735,40 +735,31 @@ class GIRAFFEGenerator(nn.Module):
         feat = torch.stack(feat, dim=0)
         p = torch.stack(p, dim=0)
 
+        raysamples = pixels_world.unsqueeze(-2) + di.unsqueeze(-1) * ray_vector.unsqueeze(-2)
+
         # Composite
         sigma_sum, feat_weighted = self.composite_function(sigma, feat)
+        _, raysamples_weighted = self.composite_function(sigma, raysamples)
 
         # Get Volume Weights
         weights = self.calc_volume_weights(di, ray_vector, sigma_sum)
         feat_map = torch.sum(weights.unsqueeze(-1) * feat_weighted, dim=-2)
         alpha_map = weights.sum(-1).reshape(batch_size, 1, res, res)
 
-        p = p.squeeze(0)
-        p_map = torch.sum(weights.unsqueeze(-1) * p, dim=-2)
+        NOCS_map = torch.sum(weights.unsqueeze(-1) * raysamples_weighted, dim=-2)
 
         # Reformat output
         feat_map = feat_map.permute(0, 2, 1).reshape(
             batch_size, -1, res, res)  # B x feat x h x w
         feat_map = feat_map.permute(0, 1, 3, 2)  # new to flip x/y
 
-        p_map = p_map.permute(0, 2, 1).reshape(
+        NOCS_map = NOCS_map.permute(0, 2, 1).reshape(
             batch_size, -1, res, res)  # B x feat x h x w
-        p_map = p_map.permute(0, 1, 3, 2)  # new to flip x/y
+        NOCS_map = NOCS_map.permute(0, 1, 3, 2)  # new to flip x/y
 
 
-        world_depth_map = p_map[:, 1]
-        # world_depth_map = (world_depth_map+1)/2
-        # world_depth_map = (world_depth_map*255).round().to(torch.uint8)
-
-        # alpha_map = F.interpolate(alpha_map, 128)
-
-        # for i, depth_map in enumerate(world_depth_map):
-        #     depth_map = (depth_map+1)/2
-        #     depth_map = (depth_map*255).round().to(torch.uint8)
-        #     filename = f"{i}.png"
-        #     im = Image.fromarray(depth_map.cpu().numpy())
-        #     im.convert("RGB").save(filename)
-        # exit()
+        world_depth_map = NOCS_map[:, 0]
+        world_depth_map = world_depth_map + 1
 
         return feat_map, world_depth_map
 
