@@ -142,20 +142,29 @@ def eval(args, generator):
             for i in tqdm(range(args.n_sample)):
                 _img_rep = generator.get_rand_rep(args.batch)
                 img_rep[args.control_i] = _img_rep[args.control_i]
-                out_li = generator(img_rep=img_rep, inject_index=args.inj_idx, mode='eval')
+                out_li = generator(img_rep=img_rep, inject_index=args.inj_idx, mode='eval', return_ids=[0, 6])
                 img_batch = out_li[0]
                 depth_map = out_li[-1]
                 for img_id, img in enumerate(img_batch):
                     outdir = os.path.join("eval", category_dir, f"obj_{img_id + num_objs_processed}")
                     os.makedirs(outdir, exist_ok=True)
                     filepath = os.path.join(outdir, f"{i}.png")
-                    depth_filepath = os.path.join(outdir, f"depth_{i}.png")
                     utils.save_image(
                         img,
                         filepath,
                         normalize=True,
                         range=(-1, 1),
                     )
+                    depth_filepath = os.path.join(outdir, f"depth_{i}.png")
+                    depth_img = depth_map[[img_id]]
+                    depth_img = F.interpolate(depth_img.unsqueeze(0), 128).squeeze(0)
+                    depth_img = (depth_img+1)/2
+                    utils.save_image(
+                        depth_img,
+                        depth_filepath,
+                        normalize=False,
+                    )
+
             num_objs_processed += args.batch
 
     if args.control_i in list(range(4,12)):
