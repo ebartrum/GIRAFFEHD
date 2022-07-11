@@ -18,6 +18,7 @@ from common import (
 import math
 from op import FusedLeakyReLU, fused_leaky_relu, upfirdn2d, conv2d_gradfix
 import random
+from PIL import Image
 
 
 ############################### GIRAFFE ###############################
@@ -649,6 +650,7 @@ class GIRAFFEGenerator(nn.Module):
         mode='train',
         not_render_background=False,
         only_render_background=False,
+        return_depth=False
     ):
 
         res = self.resolution_vol
@@ -681,7 +683,7 @@ class GIRAFFEGenerator(nn.Module):
             di = self.add_noise_to_interval(di)
 
         n_boxes = latent_codes[0].shape[1]
-        feat, sigma = [], []
+        feat, sigma, p = [], [], []
         n_iter = n_boxes if not_render_background else n_boxes + 1
         if only_render_background:
             n_iter = 1
@@ -709,6 +711,8 @@ class GIRAFFEGenerator(nn.Module):
                 # Reshape
                 sigma_i = sigma_i.reshape(batch_size, n_points, n_steps)
                 feat_i = feat_i.reshape(batch_size, n_points, n_steps, -1)
+                p_i = p_i.reshape(batch_size, n_points, n_steps, -1)
+
             else:  # Background
                 p_bg, r_bg = self.get_evaluation_points_bg(
                     pixels_world, camera_world, di, bg_transformations)
@@ -717,6 +721,7 @@ class GIRAFFEGenerator(nn.Module):
                     p_bg, r_bg, z_shape_bg, z_app_bg)
                 sigma_i = sigma_i.reshape(batch_size, n_points, n_steps)
                 feat_i = feat_i.reshape(batch_size, n_points, n_steps, -1)
+                p_i = p_i.reshape(batch_size, n_points, n_steps, -1)
 
                 if mode == 'train':
                     # As done in NeRF, add noise during training
@@ -724,8 +729,11 @@ class GIRAFFEGenerator(nn.Module):
 
             feat.append(feat_i)
             sigma.append(sigma_i)
+            p.append(p_i)
+
         sigma = F.relu(torch.stack(sigma, dim=0))
         feat = torch.stack(feat, dim=0)
+        p = torch.stack(p, dim=0)
 
         # Composite
         sigma_sum, feat_weighted = self.composite_function(sigma, feat)
@@ -733,11 +741,32 @@ class GIRAFFEGenerator(nn.Module):
         # Get Volume Weights
         weights = self.calc_volume_weights(di, ray_vector, sigma_sum)
         feat_map = torch.sum(weights.unsqueeze(-1) * feat_weighted, dim=-2)
+        alpha_map = weights.sum(-1).reshape(batch_size, 1, res, res)
+
+        p = p.squeeze(0)
+        p_map = torch.sum(weights.unsqueeze(-1) * p, dim=-2)
 
         # Reformat output
         feat_map = feat_map.permute(0, 2, 1).reshape(
             batch_size, -1, res, res)  # B x feat x h x w
         feat_map = feat_map.permute(0, 1, 3, 2)  # new to flip x/y
+
+        p_map = p_map.permute(0, 2, 1).reshape(
+            batch_size, -1, res, res)  # B x feat x h x w
+        p_map = p_map.permute(0, 1, 3, 2)  # new to flip x/y
+
+
+        world_depth_map = F.interpolate(p_map, 128, mode="bilinear")[:, 1]
+        alpha_map = F.interpolate(alpha_map, 128)
+
+        for i, depth_map in enumerate(world_depth_map):
+            depth_map = (depth_map+1)/2
+            depth_map = (depth_map*255).round().to(torch.uint8)
+            filename = f"{i}.png"
+            im = Image.fromarray(depth_map.cpu().numpy())
+            im.convert("RGB").save(filename)
+        exit()
+
         return feat_map
 
     def forward(
