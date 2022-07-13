@@ -650,9 +650,10 @@ class GIRAFFEGenerator(nn.Module):
         mode='train',
         not_render_background=False,
         only_render_background=False,
+        res=None
     ):
 
-        res = self.resolution_vol
+        res = self.resolution_vol if res is None else res
         device = self.device
         n_steps = self.n_ray_samples
         n_points = res * res
@@ -769,6 +770,8 @@ class GIRAFFEGenerator(nn.Module):
         mode='train',
         not_render_background=False,
         only_render_background=False,
+        res=None,
+        depth_only=False
     ):
         latent_codes, camera_matrices, transformations, uvr, rval = \
             self.reform_representation(img_rep)
@@ -790,17 +793,31 @@ class GIRAFFEGenerator(nn.Module):
         img_rep = self.img_representation(
             latent_codes, uvr, transformations, rval)
 
-        rgb_v, depth_map = self.volume_render_image(
-            latent_codes,
-            camera_matrices,
-            transformations,
-            bg_transformations,
-            mode=mode,
-            not_render_background=not_render_background,
-            only_render_background=only_render_background,
-        )
+        if depth_only:
+            _, depth_map = self.volume_render_image(
+                latent_codes,
+                camera_matrices,
+                transformations,
+                bg_transformations,
+                mode=mode,
+                res=res,
+                not_render_background=not_render_background,
+                only_render_background=only_render_background,
+            )
 
-        return rgb_v, depth_map
+            return None, depth_map
+        else:
+            rgb_v, depth_map = self.volume_render_image(
+                latent_codes,
+                camera_matrices,
+                transformations,
+                bg_transformations,
+                mode=mode,
+                not_render_background=not_render_background,
+                only_render_background=only_render_background,
+            )
+
+            return rgb_v, depth_map
 
 
 ############################### Stylegan Generator ###############################
@@ -1550,7 +1567,7 @@ class GIRAFFEHDGenerator(nn.Module):
             img_rep, return_size=return_size, n_steps=n_steps, render_size=render_size, padd=padd)
         return bbox
 
-    def forward(self, img_rep, inject_index=None, return_ids=[0], mode='train'):
+    def forward(self, img_rep, inject_index=None, return_ids=[0], mode='train', depth_res=32):
         '''
         return_ids (list): image at specified indices to return, input [] to return all
         0: fnl_img, 1: fg_img, 2: bg_img, 3: _fg_img, 4: fg_residual_img, 5: fg_mk
@@ -1567,7 +1584,10 @@ class GIRAFFEHDGenerator(nn.Module):
 
         _img_rep = grf_latents + img_rep[4:]
 
-        fg_feat, depth_map = self.vol_generator(not_render_background=True, img_rep=_img_rep, mode=mode)
+        fg_feat, _ = self.vol_generator(not_render_background=True, img_rep=_img_rep, mode=mode)
+        _, depth_map = self.vol_generator(not_render_background=True,
+                img_rep=_img_rep, mode=mode, res=depth_res, depth_only=True)
+
         bg_feat, _ = self.vol_generator(only_render_background=True, img_rep=_img_rep, mode=mode)
 
         fg, fg_out = self.fg_renderer(fg_feat, [w_s_fg, w_a_fg], inject_index=inject_index, mode=mode)
