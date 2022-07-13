@@ -186,7 +186,7 @@ def eval(args, generator):
             for i in tqdm(range(args.n_sample)):
                 p = p0 + delta * i
                 img_rep[args.control_i] = p
-                out_li = generator(img_rep=img_rep, inject_index=args.inj_idx, mode='eval', return_ids=[0, 5, 6], depth_res=32)
+                out_li = generator(img_rep=img_rep, inject_index=args.inj_idx, mode='eval', return_ids=[0, 5, 6], depth_res=64)
                 img_batch = out_li[0]
                 depth_map = out_li[-1]
                 alpha_map = out_li[-2]
