@@ -186,9 +186,10 @@ def eval(args, generator):
             for i in tqdm(range(args.n_sample)):
                 p = p0 + delta * i
                 img_rep[args.control_i] = p
-                out_li = generator(img_rep=img_rep, inject_index=args.inj_idx, mode='eval', return_ids=[0, 6])
+                out_li = generator(img_rep=img_rep, inject_index=args.inj_idx, mode='eval', return_ids=[0, 5, 6])
                 img_batch = out_li[0]
                 depth_map = out_li[-1]
+                alpha_map = out_li[-2]
 
                 for img_id, img in enumerate(img_batch):
                     outdir = os.path.join("eval", category_dir, f"obj_{img_id + num_objs_processed}")
@@ -200,16 +201,14 @@ def eval(args, generator):
                         normalize=True,
                         range=(-1, 1),
                     )
-                    depth_filepath = os.path.join(outdir, f"depth_{i}.png")
-                    depth_img = depth_map[[img_id]]
-                    depth_img = F.interpolate(depth_img.unsqueeze(0), 128).squeeze(0)
-                    depth_img = (depth_img+1)/2
-                    utils.save_image(
-                        depth_img,
-                        depth_filepath,
-                        normalize=False,
-                    )
+
+                    depth_filepath = os.path.join(outdir, f"depth_{i}.pt")
+                    torch.save(depth_map[img_id], depth_filepath)
+                    alpha_filepath = os.path.join(outdir, f"alpha_{i}.pt")
+                    torch.save(alpha_map[img_id], alpha_filepath)
+
             num_objs_processed += args.batch
+            exit()
 
 if __name__ == "__main__":
     device = "cuda"
