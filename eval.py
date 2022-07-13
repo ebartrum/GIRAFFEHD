@@ -135,7 +135,7 @@ def eval(args, generator):
             img_rep[5] = 0.4584*torch.ones_like(img_rep[5])
             # img_rep[7] = 0.5*torch.ones_like(img_rep[7])
             # img_rep[8] = torch.zeros_like(img_rep[8])
-            # img_rep[9] = 0.5*torch.ones_like(img_rep[9])
+            img_rep[9] = 0.5*torch.ones_like(img_rep[9])
             # img_rep[10] = 0.5*torch.ones_like(img_rep[10])
             # img_rep[11] = 0.5*torch.ones_like(img_rep[11])
 
