@@ -105,7 +105,7 @@ def get_interval(args):
     return p0, p1
 
 
-def eval(args, generator):
+def eval(args, generator, max_resolution=256):
     if args.control_i == 0:
         category_dir = "shape"
     elif args.control_i == 1:
@@ -145,6 +145,8 @@ def eval(args, generator):
                 out_li = generator(img_rep=img_rep, inject_index=args.inj_idx, mode='eval', return_ids=[0, 6])
                 img_batch = out_li[0]
                 depth_map = out_li[-1]
+                img_batch = F.interpolate(img_batch, max_resolution)
+
                 for img_id, img in enumerate(img_batch):
                     outdir = os.path.join("eval", category_dir, f"obj_{img_id + num_objs_processed}")
                     os.makedirs(outdir, exist_ok=True)
@@ -170,65 +172,70 @@ def eval(args, generator):
     if args.control_i in list(range(4,12)):
         p0, p1 = get_interval(args)
         delta = (p1 - p0) / (args.n_sample - 1)
-        while num_objs_processed < args.num_objs:
-            print(f"Current num_objs_processed: {num_objs_processed}")
-            img_rep = generator.get_rand_rep(args.batch)
+        with torch.no_grad():
+            while num_objs_processed < args.num_objs:
+                print(f"Current num_objs_processed: {num_objs_processed}")
+                img_rep = generator.get_rand_rep(args.batch)
 
-            #set defaults to 0.5
-            # img_rep[4] = 0.5*torch.ones_like(img_rep[4])
-            img_rep[5] = 0.4584*torch.ones_like(img_rep[5])
-            # img_rep[7] = torch.ones_like(img_rep[7])
+                #set defaults to 0.5
+                # img_rep[4] = 0.5*torch.ones_like(img_rep[4])
+                img_rep[5] = 0.4584*torch.ones_like(img_rep[5])
+                # img_rep[7] = torch.ones_like(img_rep[7])
 
-            # img_rep[9] = 0.5*torch.ones_like(img_rep[9])
-            # img_rep[10] = 0.5*torch.ones_like(img_rep[10])
-            # img_rep[11] = 0.5*torch.ones_like(img_rep[11])
+                # img_rep[9] = 0.5*torch.ones_like(img_rep[9])
+                # img_rep[10] = 0.5*torch.ones_like(img_rep[10])
+                # img_rep[11] = 0.5*torch.ones_like(img_rep[11])
 
-            for i in tqdm(range(args.n_sample)):
-                p = p0 + delta * i
-                img_rep[args.control_i] = p
-                out_li = generator(img_rep=img_rep, inject_index=args.inj_idx, mode='eval', return_ids=[0, 5, 6], depth_res=64)
-                img_batch = out_li[0]
-                depth_map = out_li[-1]
-                alpha_map = out_li[-2]
+                for i in tqdm(range(args.n_sample)):
+                    p = p0 + delta * i
+                    img_rep[args.control_i] = p
+                    out_li = generator(img_rep=img_rep, inject_index=args.inj_idx, mode='eval', return_ids=[0, 5, 6], depth_res=64)
+                    img_batch = out_li[0]
+                    depth_map = out_li[-1]
+                    alpha_map = out_li[-2]
+                    alpha_map = (alpha_map>0.1).to(torch.uint8)
 
-                for img_id, img in enumerate(img_batch):
-                    outdir = os.path.join("eval", category_dir, f"obj_{img_id + num_objs_processed}")
-                    os.makedirs(outdir, exist_ok=True)
-                    filepath = os.path.join(outdir, f"{i}.png")
-                    utils.save_image(
-                        img,
-                        filepath,
-                        normalize=True,
-                        range=(-1, 1),
-                    )
+                    img_batch = F.interpolate(img_batch, max_resolution)
+                    alpha_map = F.interpolate(alpha_map, max_resolution)
 
-                    depth_filepath = os.path.join(outdir, f"depth_{i}.pt")
-                    torch.save(depth_map[img_id], depth_filepath)
-                    alpha_filepath = os.path.join(outdir, f"alpha_{i}.pt")
-                    torch.save(alpha_map[img_id], alpha_filepath)
+                    for img_id, img in enumerate(img_batch):
+                        outdir = os.path.join("eval", category_dir, f"obj_{img_id + num_objs_processed}")
+                        os.makedirs(outdir, exist_ok=True)
+                        filepath = os.path.join(outdir, f"{i}.png")
+                        utils.save_image(
+                            img,
+                            filepath,
+                            normalize=True,
+                            range=(-1, 1),
+                        )
 
-                    #save depth img
-                    depth_img_filepath = os.path.join(outdir, f"depth_{i}.png")
-                    depth_img = depth_map[[img_id]]
-                    depth_img = F.interpolate(depth_img.unsqueeze(0), 128).squeeze(0)
-                    depth_img = (depth_img+1)/2
-                    utils.save_image(
-                        depth_img,
-                        depth_img_filepath,
-                        normalize=False,
-                    )
+                        depth_filepath = os.path.join(outdir, f"depth_{i}.pt")
+                        torch.save(depth_map[img_id], depth_filepath)
+                        alpha_filepath = os.path.join(outdir, f"alpha_{i}.pt")
+                        torch.save(alpha_map[img_id], alpha_filepath)
 
-                    #save alpha img
-                    alpha_img_filepath = os.path.join(outdir, f"alpha_{i}.png")
-                    alpha_img = alpha_map[[img_id]]
-                    utils.save_image(
-                        alpha_img,
-                        alpha_img_filepath,
-                        normalize=False,
-                    )
+                        #save depth img
+                        depth_img_filepath = os.path.join(outdir, f"depth_{i}.png")
+                        depth_img = depth_map[[img_id]]
+                        depth_img = F.interpolate(depth_img.unsqueeze(0), 128).squeeze(0)
+                        depth_img = (depth_img+1)/2
+                        utils.save_image(
+                            depth_img,
+                            depth_img_filepath,
+                            normalize=False,
+                        )
+
+                        #save alpha img
+                        alpha_img_filepath = os.path.join(outdir, f"alpha_{i}.png")
+                        alpha_img = alpha_map[[img_id]].float()
+                        utils.save_image(
+                            alpha_img,
+                            alpha_img_filepath,
+                            normalize=False,
+                        )
 
 
-            num_objs_processed += args.batch
+                num_objs_processed += args.batch
 
 if __name__ == "__main__":
     device = "cuda"
